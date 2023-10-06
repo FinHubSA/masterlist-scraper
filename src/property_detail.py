@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import date
 
 from pymongo import MongoClient
 
@@ -58,21 +59,84 @@ def connect_db():
     return db
 
 
+def server_timeout():
+    print("server timeout here")
+
+
 def get_listing_details(listing_url):
     listing_details_col = db.get_collection("listing_details")
 
     driver.get(listing_url)
 
+    server_timeout()
+
+    # create the listing dictionary
     listing_detail_doc = {"listing_url": listing_url}
 
-    # get the price
-    price = driver.find_element(
-        By.XPATH, r"//*[@class='p24_mBM']//*[@class='p24_price']"
-    ).text
+    # check if property is available
+    not_available = driver.find_elements(By.XPATH, r"//*[@class='col-12']/h2")
+
+    if not_available:
+        print("property no longer available")
+
+        # Define the update operation
+        update = {"$set": {"Unlisting Date": date.today()}}
+
+        # Use the update_one method to update the first matching document
+        listing_details_col.update_one(listing_detail_doc, update)
+
+        # Must we do something else here? Sometimes, the document may have never been scraped in the first place.
+        return
+
+    # # check for reduced
+    # reduced_banner = driver.find_element(By.XPATH, r"//*[@class='p24_reducedBanner']")
+
+    # # check for offer date
+    # under_offer_banner = driver.find_element(By.XPATH, r"//*[@class='p24_underOfferBanner']")
+
+    # # check for sold date
+    # sold_banner = driver.find_element(By.XPATH, r"//*[@class='p24_soldBanner']")
+
+    # # check if record in the database
+    # existing_document = listing_details_col.find_one(listing_detail_doc)
+
+    # if existing_document:
+    #     # if it is already in the database, just update it.
+    #     # Define the update operation
+    #     update = {"$set": {"": date.today()}}
+    # else:
+    #     next
+    # # if it is not in the database yet, just continue to rest
+
+    # accept the cookies
+    try:
+        cookies = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.XPATH, r"//*[@id='cookieBannerClose']"))
+        )
+
+        cookies.click()
+    except:
+        print("no cookies")
+
+    # get the price and update dictionary
+    try:
+        price = driver.find_element(
+            By.XPATH, r"//*[@class='p24_mBM']//*[@class='p24_price']"
+        ).text
+    except:
+        price = None
 
     listing_detail_doc["Price"] = price
 
-    # get agent
+    # get description and update dictionary
+    try:
+        overview = driver.find_element(By.XPATH, r"//*[@class='p24_mBM']/h1").text
+    except:
+        overview = None
+
+    listing_detail_doc["Overview"] = overview
+
+    # get agent and update dictionary
     try:
         agent_name = driver.find_element(
             By.XPATH, r"//*[@class='p24_listingCard']/a/span"
@@ -82,7 +146,8 @@ def get_listing_details(listing_url):
 
     listing_detail_doc["Agent Name"] = agent_name
 
-    # get summary data
+    # get summary data and update dictionary
+    # only left panel summary data added
     summary_els = driver.find_elements(
         By.XPATH,
         r"//*[@class='p24_keyFeaturesContainer']//*[@class='p24_listingFeatures']",
@@ -96,7 +161,7 @@ def get_listing_details(listing_url):
 
         listing_detail_doc[key.split(":")[0]] = value
 
-    # get property details data
+    # get property details data and update dictionary
     # expand all panels
     panel_els = driver.find_elements(By.XPATH, r"//*[@class='panel']")
 
@@ -111,17 +176,17 @@ def get_listing_details(listing_url):
 
         if detail_els:
             for detail_el in detail_els:
-                # get label
+                # get data label
                 key = detail_el.find_element(
                     By.XPATH, r".//*[@class='col-6 p24_propertyOverviewKey']"
                 ).text
                 try:
-                    # get value for text
+                    # get data value (text field)
                     value = detail_el.find_element(
                         By.XPATH, r".//*[@class='p24_info']"
                     ).text
                 except:
-                    # get value for date
+                    # get data value (date field)
                     value = detail_el.find_element(
                         By.XPATH,
                         r".//*[@class='js_displayMap p24_addressPropOverview']",
@@ -188,9 +253,9 @@ def get_listing_details(listing_url):
 
     print(listing_detail_doc)
 
-    listing_details_col.insert_one(listing_detail_doc)
+    # listing_details_col.insert_one(listing_detail_doc)
 
-    print("updated listing_details_col collection")
+    # print("updated listing_details_col collection")
 
 
 # initialise the driver
@@ -203,17 +268,30 @@ db = connect_db()
 # get the listing_url collection
 listing_url_col = db.get_collection("listing_url")
 
-# loop_times = int(os.getenv("loopTimes", "1"))
+loop_times = int(os.getenv("loopTimes", "10"))
 
-# for i in range(loop_times):
-#     print("scraping listing: " + str(i + 1) + "/" + str(loop_times))
+for i in range(loop_times):
+    try:
+        print("scraping listing: " + str(i + 1) + "/" + str(loop_times))
 
-#     # Find and update one document that matches the query
-#     listing_url = listing_url_col.find_one_and_update(
-#         {"scraped": False}, {"$set": {"scraped": True}}
-#     )
+        # Find and update one document that matches the query
+        listing_url = listing_url_col.find_one_and_update(
+            {"scraped": False}, {"$set": {"scraped": True}}
+        )
 
-# get_listing_details(listing_url["listing_url"])
-get_listing_details(
-    "https://www.property24.com/for-sale/vredekloof-east/brackenfell/western-cape/16641/113406616"
-)
+        get_listing_details(listing_url["listing_url"])
+
+    except Exception as e:
+        # Get the listing_detail_error collection
+        listing_detail_error_col = db.get_collection("listing_detail_error")
+
+        # Create a new document as a Python dictionary
+        new_error_doc = {
+            "failed_request": listing_url["listing_url"],
+            "error": str(e),
+        }
+
+        # Insert the new document into the collection
+        listing_detail_error_col.insert_one(new_error_doc)
+
+        print("updated listing_detail_error collection")
