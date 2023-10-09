@@ -59,16 +59,29 @@ def connect_db():
     return db
 
 
-def server_timeout():
-    print("server timeout here")
+def server_timeout(listing_url, sleep_time):
+    while True:
+        # go to the listing page
+        driver.get(listing_url)
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, r"//*[@class='navbar-brand']")
+                )
+            )
+            break
+        except:
+            time.sleep(sleep_time)
 
 
 def get_listing_details(listing_url):
     listing_details_col = db.get_collection("listing_details")
 
-    driver.get(listing_url)
+    # try to avoid server timeout
+    time.sleep(10)
 
-    server_timeout()
+    # server timeout
+    server_timeout(listing_url, 120)
 
     # create the listing dictionary
     listing_detail_doc = {"listing_url": listing_url}
@@ -80,12 +93,10 @@ def get_listing_details(listing_url):
         print("property no longer available")
 
         # Define the update operation
-        update = {"$set": {"Unlisting Date": date.today()}}
+        # update = {"$set": {"Unlisting Date": date.today()}}
 
-        # Use the update_one method to update the first matching document
-        listing_details_col.update_one(listing_detail_doc, update)
-
-        # Must we do something else here? Sometimes, the document may have never been scraped in the first place.
+        # Use the update_one method to update the first matching document in listing collection
+        # listing_details_col.update_one(listing_detail_doc, update)
         return
 
     # # check for reduced
@@ -118,17 +129,19 @@ def get_listing_details(listing_url):
     except:
         print("no cookies")
 
-    # get the price and update dictionary
-    try:
-        price = driver.find_element(
-            By.XPATH, r"//*[@class='p24_mBM']//*[@class='p24_price']"
-        ).text
-    except:
-        price = None
+    # # get the price and update dictionary
+    # time.sleep(2)
+    # try:
+    #     price = driver.find_element(
+    #         By.XPATH, r"//*[@class='p24_mBM']//*[@class='p24_price']"
+    #     ).text
+    # except:
+    #     price = None
 
-    listing_detail_doc["Price"] = price
+    # listing_detail_doc["Price"] = price
 
     # get description and update dictionary
+    time.sleep(2)
     try:
         overview = driver.find_element(By.XPATH, r"//*[@class='p24_mBM']/h1").text
     except:
@@ -137,6 +150,7 @@ def get_listing_details(listing_url):
     listing_detail_doc["Overview"] = overview
 
     # get agent and update dictionary
+    time.sleep(2)
     try:
         agent_name = driver.find_element(
             By.XPATH, r"//*[@class='p24_listingCard']/a/span"
@@ -148,6 +162,7 @@ def get_listing_details(listing_url):
 
     # get summary data and update dictionary
     # only left panel summary data added
+    time.sleep(2)
     summary_els = driver.find_elements(
         By.XPATH,
         r"//*[@class='p24_keyFeaturesContainer']//*[@class='p24_listingFeatures']",
@@ -166,7 +181,7 @@ def get_listing_details(listing_url):
     panel_els = driver.find_elements(By.XPATH, r"//*[@class='panel']")
 
     for panel_el in panel_els:
-        time.sleep(1)
+        time.sleep(2)
         panel_el.click()
 
         time.sleep(2)
@@ -208,6 +223,7 @@ def get_listing_details(listing_url):
 
             for point_of_int_el in point_of_int_els:
                 try:
+                    time.sleep(2)
                     # click on view more
                     view_more_el = WebDriverWait(point_of_int_el, 5).until(
                         EC.element_to_be_clickable(
@@ -251,11 +267,9 @@ def get_listing_details(listing_url):
 
                     poi_doc[key].append(value)
 
-    print(listing_detail_doc)
+    listing_details_col.insert_one(listing_detail_doc)
 
-    # listing_details_col.insert_one(listing_detail_doc)
-
-    # print("updated listing_details_col collection")
+    print("updated listing_details_col collection")
 
 
 # initialise the driver
