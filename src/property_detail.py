@@ -1,9 +1,16 @@
 import os
+import time
+from datetime import date
 
 from pymongo import MongoClient
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.by import By
+
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 
 # set global variables
 next_page = True
@@ -52,8 +59,217 @@ def connect_db():
     return db
 
 
+def server_timeout(listing_url, sleep_time):
+    while True:
+        # go to the listing page
+        driver.get(listing_url)
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, r"//*[@class='navbar-brand']")
+                )
+            )
+            break
+        except:
+            time.sleep(sleep_time)
+
+
 def get_listing_details(listing_url):
-    driver.get(listing_url)
+    listing_details_col = db.get_collection("listing_details")
+
+    # try to avoid server timeout
+    time.sleep(10)
+
+    # server timeout
+    server_timeout(listing_url, 120)
+
+    # create the listing dictionary
+    listing_detail_doc = {"listing_url": listing_url}
+
+    # check if property is available
+    not_available = driver.find_elements(By.XPATH, r"//*[@class='col-12']/h2")
+
+    if not_available:
+        print("property no longer available")
+
+        # Define the update operation
+        # update = {"$set": {"Unlisting Date": date.today()}}
+
+        # Use the update_one method to update the first matching document in listing collection
+        # listing_details_col.update_one(listing_detail_doc, update)
+        return
+
+    # # check for reduced
+    # reduced_banner = driver.find_element(By.XPATH, r"//*[@class='p24_reducedBanner']")
+
+    # # check for offer date
+    # under_offer_banner = driver.find_element(By.XPATH, r"//*[@class='p24_underOfferBanner']")
+
+    # # check for sold date
+    # sold_banner = driver.find_element(By.XPATH, r"//*[@class='p24_soldBanner']")
+
+    # # check if record in the database
+    # existing_document = listing_details_col.find_one(listing_detail_doc)
+
+    # if existing_document:
+    #     # if it is already in the database, just update it.
+    #     # Define the update operation
+    #     update = {"$set": {"": date.today()}}
+    # else:
+    #     next
+    # # if it is not in the database yet, just continue to rest
+
+    # accept the cookies
+    try:
+        cookies = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.XPATH, r"//*[@id='cookieBannerClose']"))
+        )
+
+        cookies.click()
+    except:
+        print("no cookies")
+
+    # # get the price and update dictionary
+    # time.sleep(2)
+    # try:
+    #     price = driver.find_element(
+    #         By.XPATH, r"//*[@class='p24_mBM']//*[@class='p24_price']"
+    #     ).text
+    # except:
+    #     price = None
+
+    # listing_detail_doc["Price"] = price
+
+    # get description and update dictionary
+    time.sleep(2)
+    try:
+        overview = driver.find_element(By.XPATH, r"//*[@class='p24_mBM']/h1").text
+    except:
+        overview = None
+
+    listing_detail_doc["Overview"] = overview
+
+    # get agent and update dictionary
+    time.sleep(2)
+    try:
+        agent_name = driver.find_element(
+            By.XPATH, r"//*[@class='p24_listingCard']/a/span"
+        ).text
+    except:
+        agent_name = None
+
+    listing_detail_doc["Agent Name"] = agent_name
+
+    # get summary data and update dictionary
+    # only left panel summary data added
+    time.sleep(2)
+    summary_els = driver.find_elements(
+        By.XPATH,
+        r"//*[@class='p24_keyFeaturesContainer']//*[@class='p24_listingFeatures']",
+    )
+
+    for summary_el in summary_els:
+        key = summary_el.find_element(By.XPATH, r".//*[@class='p24_feature']").text
+        value = summary_el.find_element(
+            By.XPATH, r".//*[@class='p24_featureAmount']"
+        ).text
+
+        listing_detail_doc[key.split(":")[0]] = value
+
+    # get property details data and update dictionary
+    # expand all panels
+    panel_els = driver.find_elements(By.XPATH, r"//*[@class='panel']")
+
+    for panel_el in panel_els:
+        time.sleep(2)
+        panel_el.click()
+
+        time.sleep(2)
+        detail_els = panel_el.find_elements(
+            By.XPATH, r".//*[@class='row p24_propertyOverviewRow']"
+        )
+
+        if detail_els:
+            for detail_el in detail_els:
+                # get data label
+                key = detail_el.find_element(
+                    By.XPATH, r".//*[@class='col-6 p24_propertyOverviewKey']"
+                ).text
+                try:
+                    # get data value (text field)
+                    value = detail_el.find_element(
+                        By.XPATH, r".//*[@class='p24_info']"
+                    ).text
+                except:
+                    # get data value (date field)
+                    value = detail_el.find_element(
+                        By.XPATH,
+                        r".//*[@class='js_displayMap p24_addressPropOverview']",
+                    ).text
+
+                listing_detail_doc[key] = value
+        else:
+            # get points of interest information
+            panel_el_details = panel_el.find_element(
+                By.XPATH, r".//*[@id='P24_pointsOfInterest']"
+            )
+
+            # scroll to element to avoid error
+            ActionChains(driver).move_to_element(panel_el_details).perform()
+
+            point_of_int_els = driver.find_elements(
+                By.XPATH, r".//*[@class='js_P24_POICategory p24_poiCategory']"
+            )
+
+            for point_of_int_el in point_of_int_els:
+                try:
+                    time.sleep(2)
+                    # click on view more
+                    view_more_el = WebDriverWait(point_of_int_el, 5).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, r".//*[@class='col-12']/a")
+                        )
+                    )
+                    view_more_el.click()
+                except:
+                    print("\nNo view more")
+
+                # get the category name
+                time.sleep(1)
+                category = point_of_int_el.find_element(
+                    By.XPATH, r".//*[@class='p24_semibold']"
+                ).text
+
+                location_elements = point_of_int_el.find_elements(
+                    By.XPATH, r".//*[@class='col-6']"
+                )
+
+                distance_elements = point_of_int_el.find_elements(
+                    By.XPATH, r".//*[@class='col-6 noPadding p24_semibold']"
+                )
+
+                if "Points of interest" not in listing_detail_doc:
+                    listing_detail_doc["Points of interest"] = {}
+
+                if category not in listing_detail_doc["Points of interest"]:
+                    listing_detail_doc["Points of interest"][category] = {}
+
+                poi_doc = listing_detail_doc["Points of interest"][category]
+
+                for location_element, distance_element in zip(
+                    location_elements[1:], distance_elements
+                ):
+                    key = location_element.text
+                    value = distance_element.text
+
+                    if key not in poi_doc:
+                        poi_doc[key] = []
+
+                    poi_doc[key].append(value)
+
+    listing_details_col.insert_one(listing_detail_doc)
+
+    print("updated listing_details_col collection")
 
 
 # initialise the driver
@@ -64,4 +280,32 @@ print("connecting db")
 db = connect_db()
 
 # get the listing_url collection
-listing_url_col = db.get_collection("listing_details")
+listing_url_col = db.get_collection("listing_url")
+
+loop_times = int(os.getenv("loopTimes", "10"))
+
+for i in range(loop_times):
+    try:
+        print("scraping listing: " + str(i + 1) + "/" + str(loop_times))
+
+        # Find and update one document that matches the query
+        listing_url = listing_url_col.find_one_and_update(
+            {"scraped": False}, {"$set": {"scraped": True}}
+        )
+
+        get_listing_details(listing_url["listing_url"])
+
+    except Exception as e:
+        # Get the listing_detail_error collection
+        listing_detail_error_col = db.get_collection("listing_detail_error")
+
+        # Create a new document as a Python dictionary
+        new_error_doc = {
+            "failed_request": listing_url["listing_url"],
+            "error": str(e),
+        }
+
+        # Insert the new document into the collection
+        listing_detail_error_col.insert_one(new_error_doc)
+
+        print("updated listing_detail_error collection")
