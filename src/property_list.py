@@ -10,7 +10,7 @@ from selenium.webdriver.common.by import By
 # set global variables
 next_page = True
 base_url = os.getenv("base_url","https://www.property24.com/for-sale/western-cape/9")
-# base_url = os.getenv("base_url","https://www.property24.com/for-sale/rosebank/cape-town/western-cape/8683")
+# base_url = os.getenv("base_url","https://www.property24.com/for-sale/mowbray/cape-town/western-cape/8677")
 # base_url = os.getenv("base_url","https://www.property24.com/for-sale/constantia/cape-town/western-cape/11742")
 
 categories = os.getenv("categories","House,ApartmentOrFlat,Townhouse")
@@ -121,7 +121,7 @@ def bulk_update(listings):
 def get_listing_changes(listing, listing_info):
     changes_results = listing.find_elements(
             By.XPATH,
-            r"//*[@class='hidden-print p24_Gallerybadge']/li",
+            r".//ul[@class='hidden-print p24_Gallerybadge']/li",
         )
     
     changes_dict = {}
@@ -140,17 +140,17 @@ def get_listing_info(listing):
 
     listing_price = listing.find_element(
             By.XPATH,
-            r"//span[@class='p24_price']",
+            r".//span[@class='p24_price']",
         ).get_attribute('content')
     
     listing_currency = listing.find_element(
             By.XPATH,
-            r"//meta[@itemProp='priceCurrency']",
+            r".//meta[@itemProp='priceCurrency']",
         ).get_attribute('content')
 
     listing_badges = listing.find_elements(
             By.XPATH,
-            r"//*[@class='p24_badges']/li",
+            r".//ul[@class='p24_badges']/li",
         )
 
     listing_info = {
@@ -196,7 +196,7 @@ listing_col.create_index([("url")], unique=True)
 while next_page:
     page_url = f"{base_url}/p{page_number}?PropertyCategory={categories}"
     # page_url = f"{base_url}/p{page_number}?sp=pt%3d800000&PropertyCategory={categories}"
-    # page_url = f"{base_url}/p{page_number}?sp=pf%3d9900000%26pt%3d9900000&PropertyCategory={categories}"
+    # page_url = f"{base_url}/p{page_number}?sp=pf%3d900000%26pt%3d1000000&PropertyCategory={categories}"
 
     get_page_data(page_url)
 
