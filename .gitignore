@@ -1,2 +1,5 @@
 /.DS_Store
-/property24_env
+/env
+/venv
+/.vscode
+/tmp/db

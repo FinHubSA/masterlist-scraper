@@ -1,22 +1,26 @@
 import os
 
-from pymongo import MongoClient
+from datetime import date
+from pymongo import MongoClient, UpdateOne
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+# from webdriver_manager.chrome import ChromeDriverManager
 
 # set global variables
 next_page = True
-base_url = "https://www.property24.com/for-sale/western-cape/9/p"
-category = "?PropertyCategory=House%2cApartmentOrFlat%2cTownhouse"
-page_number = 1
+base_url = os.getenv("base_url","https://www.property24.com/for-sale/western-cape/9")
+# base_url = os.getenv("base_url","https://www.property24.com/for-sale/rosebank/cape-town/western-cape/8683")
+# base_url = os.getenv("base_url","https://www.property24.com/for-sale/constantia/cape-town/western-cape/11742")
 
+categories = os.getenv("categories","House,ApartmentOrFlat,Townhouse")
+page_number = 1
 
 def set_local_chrome_driver():
     # Set User Agent and chrome option
     USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
     chrome_options = webdriver.ChromeOptions()
-    # chrome_options.add_argument("headless")
+    chrome_options.add_argument("headless")
     chrome_options.add_argument("window-size=1920,1080")
     chrome_options.add_argument(f"user-agent={USER_AGENT}")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -41,7 +45,6 @@ def set_local_chrome_driver():
 
     return driver
 
-
 def connect_db():
     mongodbUri = os.getenv(
         "mongodb_uri",
@@ -51,14 +54,15 @@ def connect_db():
     db = client.get_database("property24-data")
     return db
 
-
 def get_page_data(page_url):
     global next_page
+
+    print("page "+str(page_number))
 
     # go to the page url
     driver.get(page_url)
 
-    listing_url_list = []
+    listings = []
 
     try:
         # find the list of listed properties
@@ -70,22 +74,113 @@ def get_page_data(page_url):
         # Check if there are no listing results
         if not listing_results:
             next_page = False
-        else:
-            # get the listing url and append the listingURLList
-            for listing in listing_results:
-                listing_url = listing.get_attribute("href")
-                listing_url_list.append({"listing_url": listing_url, "scraped": False})
+            return
 
-            # Insert the list of documents into the collection
-            listing_url_col.insert_many(
-                listing_url_list, ordered=False, bypass_document_validation=True
-            )
+        # get the listing url and append the listingURLList
+        for listing in listing_results:
+            if not listing.is_displayed():
+                continue
+            
+            listing_info = get_listing_info(listing)
+            listing_changes = get_listing_changes(listing, listing_info)
+            
+            listing_info.update(listing_changes)
+            listings.append(listing_info)
 
-        print("updated listing_url_col collection")
+        bulk_update(listings)
+
+        print("updated listings collection")
 
     except Exception as e:
-        print("Error on page " + str(page_number) + " " + str(e))
+        if "E11000 duplicate key error" in str(e):
+            print(page_url)
+            print("Duplicates Found")
+            print("Number Inserted: "+str(e.details["nInserted"]))
+        else:
+            print("Error on page " + str(page_number) + " " + str(e))
 
+''' 
+Gets the listings and does an upsert.
+If a listing already exists, any new fields will be added. 
+Old fields will be ignored i.e. NOT updated but IGNORED
+'''
+def bulk_update(listings):
+        
+        bulk_update = []
+        for listing in listings:
+            bulk_update.append(
+                UpdateOne(
+                    {"url": listing["url"]}, 
+                    [{"$set": listing}],
+                    upsert=True)
+            )
+        
+        db.listings.bulk_write(bulk_update)
+
+''' Gets any changes to the listing such as Offer, Reduction, Sold '''
+def get_listing_changes(listing, listing_info):
+    changes_results = listing.find_elements(
+            By.XPATH,
+            r"//*[@class='hidden-print p24_Gallerybadge']/li",
+        )
+    
+    changes_dict = {}
+    for change in changes_results:
+        change_text = (change.text).lower().replace(' ', '_')
+        if change_text in ['under_offer','reduced','sold']:
+            price = listing_info["price"]["$cond"]["then"]
+            changes_dict[change_text+"."+price] = str(date.today())
+    
+    return changes_dict
+
+''' Gets the info of the listing like province, listingID, etc '''
+def get_listing_info(listing):
+    url = listing.get_attribute("href")
+    listing_locale = url.split("/")[-5:]
+
+    listing_price = listing.find_element(
+            By.XPATH,
+            r"//span[@class='p24_price']",
+        ).get_attribute('content')
+    
+    listing_currency = listing.find_element(
+            By.XPATH,
+            r"//meta[@itemProp='priceCurrency']",
+        ).get_attribute('content')
+
+    listing_badges = listing.find_elements(
+            By.XPATH,
+            r"//*[@class='p24_badges']/li",
+        )
+
+    listing_info = {
+            "url": url,
+            "price": get_conditional_set("price",listing_price),
+            "currency": listing_currency,
+            "scraped": get_conditional_set("scraped",False),
+            "suburb":listing_locale[0],
+            "town":listing_locale[1],
+            "province":listing_locale[2]
+        }
+    
+    for listing_badge in listing_badges:
+        badge = (listing_badge.text).lower()
+        if not badge:
+            continue
+        listing_info["badges."+badge] = True
+
+    return listing_info
+
+''' 
+Returns a condition for setting the field.
+If the field does not exist it will be SET otherwise it will remain UNCHANGED
+'''
+def get_conditional_set(field_name, field_value):
+    return {"$cond": {
+                'if':{"$eq": [{"$type": "$"+field_name}, "missing"]},
+                'then': field_value,
+                'else': "$"+field_name
+        }}
 
 # initialise the driver
 driver = set_local_chrome_driver()
@@ -94,11 +189,14 @@ driver = set_local_chrome_driver()
 print("connecting db")
 db = connect_db()
 
-# get the listing_url collection
-listing_url_col = db.get_collection("listing_url")
+# get the url collection
+listing_col = db.get_collection("listings")
+listing_col.create_index([("url")], unique=True)
 
 while next_page:
-    page_url = f"{base_url}{page_number}{category}"
+    page_url = f"{base_url}/p{page_number}?PropertyCategory={categories}"
+    # page_url = f"{base_url}/p{page_number}?sp=pt%3d800000&PropertyCategory={categories}"
+    # page_url = f"{base_url}/p{page_number}?sp=pf%3d9900000%26pt%3d9900000&PropertyCategory={categories}"
 
     get_page_data(page_url)
 
