@@ -115,7 +115,7 @@ def bulk_update(listings):
                     upsert=True)
             )
         
-        db.listings.bulk_write(bulk_update)
+        db.listings.bulk_write(bulk_update, ordered=False)
 
 ''' Gets any changes to the listing such as Offer, Reduction, Sold '''
 def get_listing_changes(listing, listing_info):
