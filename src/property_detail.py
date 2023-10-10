@@ -60,7 +60,9 @@ def connect_db():
 
 
 def server_timeout(listing_url, sleep_time):
-    while True:
+    max_attempts = 3
+    attempts = 0
+    while attempts <= max_attempts:
         # go to the listing page
         driver.get(listing_url)
         try:
@@ -71,7 +73,16 @@ def server_timeout(listing_url, sleep_time):
             )
             break
         except:
+            print(
+                "server timeout failure, wait 2 mins. Scraped: "
+                + i
+                + " listings before timeout"
+            )
             time.sleep(sleep_time)
+            attempts += 1
+    else:
+        print("Error, wait 30 minutes")
+        time.sleep(1800)
 
 
 def get_listing_details(listing_url):
@@ -91,33 +102,7 @@ def get_listing_details(listing_url):
 
     if not_available:
         print("property no longer available")
-
-        # Define the update operation
-        # update = {"$set": {"Unlisting Date": date.today()}}
-
-        # Use the update_one method to update the first matching document in listing collection
-        # listing_details_col.update_one(listing_detail_doc, update)
         return
-
-    # # check for reduced
-    # reduced_banner = driver.find_element(By.XPATH, r"//*[@class='p24_reducedBanner']")
-
-    # # check for offer date
-    # under_offer_banner = driver.find_element(By.XPATH, r"//*[@class='p24_underOfferBanner']")
-
-    # # check for sold date
-    # sold_banner = driver.find_element(By.XPATH, r"//*[@class='p24_soldBanner']")
-
-    # # check if record in the database
-    # existing_document = listing_details_col.find_one(listing_detail_doc)
-
-    # if existing_document:
-    #     # if it is already in the database, just update it.
-    #     # Define the update operation
-    #     update = {"$set": {"": date.today()}}
-    # else:
-    #     next
-    # # if it is not in the database yet, just continue to rest
 
     # accept the cookies
     try:
@@ -128,17 +113,6 @@ def get_listing_details(listing_url):
         cookies.click()
     except:
         print("no cookies")
-
-    # # get the price and update dictionary
-    # time.sleep(2)
-    # try:
-    #     price = driver.find_element(
-    #         By.XPATH, r"//*[@class='p24_mBM']//*[@class='p24_price']"
-    #     ).text
-    # except:
-    #     price = None
-
-    # listing_detail_doc["Price"] = price
 
     # get description and update dictionary
     time.sleep(2)
@@ -280,7 +254,7 @@ print("connecting db")
 db = connect_db()
 
 # get the listing_url collection
-listing_url_col = db.get_collection("listing_url")
+listings_col = db.get_collection("listings")
 
 loop_times = int(os.getenv("loopTimes", "10"))
 
@@ -289,11 +263,11 @@ for i in range(loop_times):
         print("scraping listing: " + str(i + 1) + "/" + str(loop_times))
 
         # Find and update one document that matches the query
-        listing_url = listing_url_col.find_one_and_update(
+        listing_url = listings_col.find_one_and_update(
             {"scraped": False}, {"$set": {"scraped": True}}
         )
 
-        get_listing_details(listing_url["listing_url"])
+        get_listing_details(listing_url["url"])
 
     except Exception as e:
         # Get the listing_detail_error collection
@@ -301,7 +275,7 @@ for i in range(loop_times):
 
         # Create a new document as a Python dictionary
         new_error_doc = {
-            "failed_request": listing_url["listing_url"],
+            "failed_request": listing_url["url"],
             "error": str(e),
         }
 
