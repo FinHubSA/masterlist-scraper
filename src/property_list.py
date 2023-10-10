@@ -1,7 +1,7 @@
 import os
 
 from datetime import date
-from pymongo import MongoClient, UpdateOne
+from pymongo import MongoClient, ReturnDocument, UpdateOne
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -97,7 +97,7 @@ def get_page_data(page_url):
             print("Duplicates Found")
             print("Number Inserted: "+str(e.details["nInserted"]))
         else:
-            print("Error on page " + str(page_number) + " " + str(e))
+            print("Error on page " + str(page_url) + " " + str(e))
 
 ''' 
 Gets the listings and does an upsert.
@@ -143,10 +143,13 @@ def get_listing_info(listing):
             r".//span[@class='p24_price']",
         ).get_attribute('content')
     
-    listing_currency = listing.find_element(
-            By.XPATH,
-            r".//meta[@itemProp='priceCurrency']",
-        ).get_attribute('content')
+    try:
+        listing_currency = listing.find_element(
+                By.XPATH,
+                r".//meta[@itemProp='priceCurrency']",
+            ).get_attribute('content')
+    except Exception as e:
+        listing_currency = ""
 
     listing_badges = listing.find_elements(
             By.XPATH,
@@ -193,11 +196,27 @@ db = connect_db()
 listing_col = db.get_collection("listings")
 listing_col.create_index([("url")], unique=True)
 
+# get the page tracker 
+listings_page_tracker_col = db.get_collection("listings_page_tracker")
+listings_page_tracker_col.create_index([("url")], unique=True)
+
 while next_page:
+    page_tracker = listings_page_tracker_col.find_one_and_update(
+        {"url": base_url}, { "$inc": { 'page': 1 }}, upsert=True, return_document=ReturnDocument.AFTER
+    )
+
+    page_number = page_tracker["page"]
+
     page_url = f"{base_url}/p{page_number}?PropertyCategory={categories}"
     # page_url = f"{base_url}/p{page_number}?sp=pt%3d800000&PropertyCategory={categories}"
     # page_url = f"{base_url}/p{page_number}?sp=pf%3d900000%26pt%3d1000000&PropertyCategory={categories}"
 
     get_page_data(page_url)
 
-    page_number += 1
+    # If there is no next page reset
+    if not next_page:
+        page_tracker = listings_page_tracker_col.find_one_and_update(
+            {"url": base_url}, {"$set":{"page": 0}}
+        )
+    
+
