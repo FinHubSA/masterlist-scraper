@@ -201,9 +201,13 @@ listings_page_tracker_col = db.get_collection("listings_page_tracker")
 listings_page_tracker_col.create_index([("url")], unique=True)
 
 while next_page:
-    page_tracker = listings_page_tracker_col.find_one_and_update(
-        {"url": base_url}, { "$inc": { 'page': 1 }}, upsert=True, return_document=ReturnDocument.AFTER
-    )
+    try:
+        page_tracker = listings_page_tracker_col.find_one_and_update(
+            {"url": base_url, "date":str(date.today()), "completed":False}, {"$inc": { 'page': 1 }}, upsert=True, return_document=ReturnDocument.AFTER
+        )
+    except Exception as e:
+        print("Listings Scraping Completed")
+        break
 
     page_number = page_tracker["page"]
 
@@ -216,7 +220,7 @@ while next_page:
     # If there is no next page reset
     if not next_page:
         page_tracker = listings_page_tracker_col.find_one_and_update(
-            {"url": base_url}, {"$set":{"page": 0}}
+            {"url": base_url,"date":str(date.today())}, {"$set":{"page": 0,"completed": True}}
         )
     
 
