@@ -81,8 +81,7 @@ def server_timeout(listing_url, sleep_time):
             time.sleep(sleep_time)
             attempts += 1
     else:
-        print("Error, wait 30 minutes")
-        time.sleep(1800)
+        raise
 
 
 def get_listing_details(listing_url):
@@ -99,8 +98,9 @@ def get_listing_details(listing_url):
 
     # check if property is available
     not_available = driver.find_elements(By.XPATH, r"//*[@class='col-12']/h2")
+    not_found = driver.find_elements(By.XPATH, r"//*[@class='col-6']/h1")
 
-    if not_available:
+    if not_available or not_found:
         print("property no longer available")
         return
 
@@ -137,26 +137,69 @@ def get_listing_details(listing_url):
     # get summary data and update dictionary
     # only left panel summary data added
     time.sleep(2)
-    summary_els = driver.find_elements(
-        By.XPATH,
-        r"//*[@class='p24_keyFeaturesContainer']//*[@class='p24_listingFeatures']",
+
+    summary_els = WebDriverWait(driver, 3).until(
+        EC.presence_of_all_elements_located(
+            (
+                By.XPATH,
+                r"//*[@class='p24_keyFeaturesContainer']//*[@class='p24_listingFeatures']",
+            )
+        )
     )
 
     for summary_el in summary_els:
-        key = summary_el.find_element(By.XPATH, r".//*[@class='p24_feature']").text
-        value = summary_el.find_element(
-            By.XPATH, r".//*[@class='p24_featureAmount']"
-        ).text
+        key = (
+            WebDriverWait(summary_el, 3)
+            .until(
+                EC.presence_of_element_located(
+                    (
+                        By.XPATH,
+                        r".//*[@class='p24_feature']",
+                    )
+                )
+            )
+            .text
+        )
+
+        value = (
+            WebDriverWait(summary_el, 3)
+            .until(
+                EC.presence_of_element_located(
+                    (
+                        By.XPATH,
+                        r".//*[@class='p24_featureAmount']",
+                    )
+                )
+            )
+            .text
+        )
 
         listing_detail_doc[key.split(":")[0]] = value
 
     # get property details data and update dictionary
     # expand all panels
-    panel_els = driver.find_elements(By.XPATH, r"//*[@class='panel']")
 
-    for panel_el in panel_els:
-        time.sleep(2)
-        panel_el.click()
+    panel_els = WebDriverWait(driver, 5).until(
+        EC.presence_of_all_elements_located(
+            (
+                By.XPATH,
+                r"//*[@class='panel']",
+            )
+        )
+    )
+
+    for panel_el_num, panel_el in enumerate(panel_els):
+        if not panel_el_num == 0:
+            WebDriverWait(panel_el, 5).until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        r"//*[@class='panel']",
+                    )
+                )
+            )
+
+            panel_el.click()
 
         time.sleep(2)
         detail_els = panel_el.find_elements(
