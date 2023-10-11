@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
+# from webdriver_manager.chrome import ChromeDriverManager
 
 # set global variables
 next_page = True
@@ -23,7 +24,7 @@ def set_local_chrome_driver():
     # Set User Agent and chrome option
     USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
     chrome_options = webdriver.ChromeOptions()
-    # chrome_options.add_argument("headless")
+    chrome_options.add_argument("headless")
     chrome_options.add_argument("window-size=1920,1080")
     chrome_options.add_argument(f"user-agent={USER_AGENT}")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -89,7 +90,7 @@ def get_listing_details(listing_url):
     listing_details_col = db.get_collection("listing_details")
 
     # try to avoid server timeout
-    time.sleep(10)
+    time.sleep(4)
 
     # server timeout
     server_timeout(listing_url, 120)
@@ -139,14 +140,17 @@ def get_listing_details(listing_url):
     time.sleep(2)
     summary_els = driver.find_elements(
         By.XPATH,
-        r"//*[@class='p24_keyFeaturesContainer']//*[@class='p24_listingFeatures']",
+        r"//*[contains(@class, 'p24_keyFeaturesContainer')]//*[@class='p24_listingFeatures']",
     )
 
     for summary_el in summary_els:
         key = summary_el.find_element(By.XPATH, r".//*[@class='p24_feature']").text
-        value = summary_el.find_element(
-            By.XPATH, r".//*[@class='p24_featureAmount']"
-        ).text
+        try:
+            value = summary_el.find_element(
+                By.XPATH, r".//*[@class='p24_featureAmount']"
+            ).text
+        except Exception as e:
+            value = True
 
         listing_detail_doc[key.split(":")[0]] = value
 
@@ -154,97 +158,111 @@ def get_listing_details(listing_url):
     # expand all panels
     panel_els = driver.find_elements(By.XPATH, r"//*[@class='panel']")
 
-    for panel_el in panel_els:
-        time.sleep(2)
-        panel_el.click()
-
-        time.sleep(2)
-        detail_els = panel_el.find_elements(
-            By.XPATH, r".//*[@class='row p24_propertyOverviewRow']"
-        )
-
-        if detail_els:
-            for detail_el in detail_els:
-                # get data label
-                key = detail_el.find_element(
-                    By.XPATH, r".//*[@class='col-6 p24_propertyOverviewKey']"
-                ).text
-                try:
-                    # get data value (text field)
-                    value = detail_el.find_element(
-                        By.XPATH, r".//*[@class='p24_info']"
-                    ).text
-                except:
-                    # get data value (date field)
-                    value = detail_el.find_element(
-                        By.XPATH,
-                        r".//*[@class='js_displayMap p24_addressPropOverview']",
-                    ).text
-
-                listing_detail_doc[key] = value
-        else:
-            # get points of interest information
-            panel_el_details = panel_el.find_element(
-                By.XPATH, r".//*[@id='P24_pointsOfInterest']"
-            )
-
-            # scroll to element to avoid error
-            ActionChains(driver).move_to_element(panel_el_details).perform()
-
-            point_of_int_els = driver.find_elements(
-                By.XPATH, r".//*[@class='js_P24_POICategory p24_poiCategory']"
-            )
-
-            for point_of_int_el in point_of_int_els:
-                try:
-                    time.sleep(2)
-                    # click on view more
-                    view_more_el = WebDriverWait(point_of_int_el, 5).until(
-                        EC.element_to_be_clickable(
-                            (By.XPATH, r".//*[@class='col-12']/a")
-                        )
-                    )
-                    view_more_el.click()
-                except:
-                    print("\nNo view more")
-
-                # get the category name
-                time.sleep(1)
-                category = point_of_int_el.find_element(
-                    By.XPATH, r".//*[@class='p24_semibold']"
-                ).text
-
-                location_elements = point_of_int_el.find_elements(
-                    By.XPATH, r".//*[@class='col-6']"
-                )
-
-                distance_elements = point_of_int_el.find_elements(
-                    By.XPATH, r".//*[@class='col-6 noPadding p24_semibold']"
-                )
-
-                if "Points of interest" not in listing_detail_doc:
-                    listing_detail_doc["Points of interest"] = {}
-
-                if category not in listing_detail_doc["Points of interest"]:
-                    listing_detail_doc["Points of interest"][category] = {}
-
-                poi_doc = listing_detail_doc["Points of interest"][category]
-
-                for location_element, distance_element in zip(
-                    location_elements[1:], distance_elements
-                ):
-                    key = location_element.text
-                    value = distance_element.text
-
-                    if key not in poi_doc:
-                        poi_doc[key] = []
-
-                    poi_doc[key].append(value)
+    # only get the 'property overview' for now
+    get_panel_data(panel_els[0], listing_detail_doc)
 
     listing_details_col.insert_one(listing_detail_doc)
 
     print("updated listing_details_col collection")
 
+def get_panel_data(panel_el, listing_detail_doc):
+    time.sleep(2)
+    panel_el.click()
+
+    panel_heading = panel_el.find_element(
+        By.XPATH, r".//*[contains(@class, 'panel-heading')]"
+    ).text
+
+    time.sleep(2)
+    detail_els = panel_el.find_elements(
+        By.XPATH, r".//*[@class='row p24_propertyOverviewRow']"
+    )
+
+    if detail_els:
+        for detail_el in detail_els:
+            # get data label
+            key = detail_el.find_element(
+                By.XPATH, r".//*[@class='col-6 p24_propertyOverviewKey']"
+            ).text
+            try:
+                # get data value (text field)
+                value = detail_el.find_element(
+                    By.XPATH, r".//*[@class='p24_info']"
+                ).text
+            except:
+                # get data value (date field)
+                value = detail_el.find_element(
+                    By.XPATH,
+                    r".//*[@class='js_displayMap p24_addressPropOverview']",
+                ).text
+
+            if panel_heading.lower() == 'property overview':
+                listing_detail_doc[key] = value
+            else:
+                if panel_heading not in listing_detail_doc:
+                    listing_detail_doc[panel_heading] = {}
+                listing_detail_doc[panel_heading][key] = value
+    else:
+        get_points_of_interest(panel_el, listing_detail_doc)
+
+def get_points_of_interest(panel_el, listing_detail_doc):
+    # get points of interest information
+    panel_el_details = panel_el.find_element(
+        By.XPATH, r".//*[@id='P24_pointsOfInterest']"
+    )
+
+    # scroll to element to avoid error
+    ActionChains(driver).move_to_element(panel_el_details).perform()
+
+    point_of_int_els = driver.find_elements(
+        By.XPATH, r".//*[@class='js_P24_POICategory p24_poiCategory']"
+    )
+
+    for point_of_int_el in point_of_int_els:
+        try:
+            time.sleep(2)
+            # click on view more
+            view_more_el = WebDriverWait(point_of_int_el, 5).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, r".//*[@class='col-12']/a")
+                )
+            )
+            view_more_el.click()
+        except:
+            print("\nNo view more")
+
+        # get the category name
+        time.sleep(1)
+        category = point_of_int_el.find_element(
+            By.XPATH, r".//*[@class='p24_semibold']"
+        ).text
+
+        location_elements = point_of_int_el.find_elements(
+            By.XPATH, r".//*[@class='col-6']"
+        )
+
+        distance_elements = point_of_int_el.find_elements(
+            By.XPATH, r".//*[@class='col-6 noPadding p24_semibold']"
+        )
+
+        if "Points of interest" not in listing_detail_doc:
+            listing_detail_doc["Points of interest"] = {}
+
+        if category not in listing_detail_doc["Points of interest"]:
+            listing_detail_doc["Points of interest"][category] = {}
+
+        poi_doc = listing_detail_doc["Points of interest"][category]
+
+        for location_element, distance_element in zip(
+            location_elements[1:], distance_elements
+        ):
+            key = location_element.text
+            value = distance_element.text
+
+            if key not in poi_doc:
+                poi_doc[key] = []
+
+            poi_doc[key].append(value)
 
 # initialise the driver
 driver = set_local_chrome_driver()
