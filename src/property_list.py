@@ -198,7 +198,7 @@ listing_col.create_index([("url")], unique=True)
 
 # get the page tracker 
 listings_page_tracker_col = db.get_collection("listings_page_tracker")
-listings_page_tracker_col.create_index([("url")], unique=True)
+listings_page_tracker_col.create_index([("url"),("date")], unique=True)
 
 while next_page:
     try:
