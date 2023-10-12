@@ -67,7 +67,7 @@ def server_timeout(listing_url, sleep_time):
         # go to the listing page
         driver.get(listing_url)
         try:
-            WebDriverWait(driver, 5).until(
+            WebDriverWait(driver, 2).until(
                 EC.presence_of_element_located(
                     (By.XPATH, r"//*[@class='navbar-brand']")
                 )
@@ -89,7 +89,7 @@ def get_listing_details(listing_url):
     listing_details_col = db.get_collection("listing_details")
 
     # try to avoid server timeout
-    time.sleep(4)
+    time.sleep(2)
 
     # server timeout
     server_timeout(listing_url, 120)
@@ -116,7 +116,7 @@ def get_listing_details(listing_url):
         print("no cookies")
 
     # get description and update dictionary
-    time.sleep(2)
+    # time.sleep(2)
     try:
         overview = driver.find_element(By.XPATH, r"//*[@class='p24_mBM']/h1").text
     except:
@@ -125,7 +125,7 @@ def get_listing_details(listing_url):
     listing_detail_doc["Overview"] = overview
 
     # get agent and update dictionary
-    time.sleep(2)
+    # time.sleep(2)
     try:
         agent_name = driver.find_element(
             By.XPATH, r"//*[@class='p24_listingCard']/a/span"
@@ -137,7 +137,7 @@ def get_listing_details(listing_url):
 
     # get summary data and update dictionary
     # only left panel summary data added
-    summary_els = WebDriverWait(driver, 2).until(
+    summary_els = WebDriverWait(driver, 1).until(
         EC.presence_of_all_elements_located(
             (
                 By.XPATH,
@@ -148,7 +148,7 @@ def get_listing_details(listing_url):
 
     for summary_el in summary_els:
         key = (
-            WebDriverWait(summary_el, 2)
+            WebDriverWait(summary_el, 1)
             .until(
                 EC.presence_of_element_located(
                     (
@@ -162,7 +162,7 @@ def get_listing_details(listing_url):
         
         try:
             value = (
-                WebDriverWait(summary_el, 2)
+                WebDriverWait(summary_el, 1)
                 .until(
                     EC.presence_of_element_located(
                         (
@@ -176,12 +176,14 @@ def get_listing_details(listing_url):
         except Exception as e:
             value = True
 
+        value = get_int_value(value)
+
         listing_detail_doc[key.split(":")[0]] = value
 
     # get property details data and update dictionary
     # expand all panels
 
-    panel_els = WebDriverWait(driver, 5).until(
+    panel_els = WebDriverWait(driver, 2).until(
         EC.presence_of_all_elements_located(
             (
                 By.XPATH,
@@ -196,15 +198,35 @@ def get_listing_details(listing_url):
 
     print("updated listing_details_col collection")
 
+def get_int_value(value):
+    if type(value) != bool:
+        # try make value into integer
+        try:
+            value = int(value)
+            return value
+        except Exception as e:
+            pass
+        try:
+            value = int(value[1:].replace(" ", ""))
+            return value
+        except Exception as e:
+            pass
+        try:
+            value = int(value[:-2].replace(" ", ""))
+            return value
+        except Exception as e:
+            pass
+    return value
+
 def get_panel_data(panel_el, listing_detail_doc):
-    time.sleep(2)
+    # time.sleep(2)
     panel_el.click()
 
     panel_heading = panel_el.find_element(
         By.XPATH, r".//*[contains(@class, 'panel-heading')]"
     ).text
 
-    time.sleep(2)
+    # time.sleep(2)
     detail_els = panel_el.find_elements(
         By.XPATH, r".//*[@class='row p24_propertyOverviewRow']"
     )
@@ -227,6 +249,8 @@ def get_panel_data(panel_el, listing_detail_doc):
                     r".//*[@class='js_displayMap p24_addressPropOverview']",
                 ).text
 
+            value = get_int_value(value)
+            
             if panel_heading.lower() == 'property overview':
                 listing_detail_doc[key] = value
             else:
