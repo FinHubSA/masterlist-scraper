@@ -335,13 +335,23 @@ for i in range(loop_times):
     try:
         print("scraping listing: " + str(i + 1) + "/" + str(loop_times))
 
-        # Find and update one document that matches the query
+         # Find and update one document that matches the query
         listing_url = listings_col.find_one_and_update(
-            {"scraped": False}, {"$set": {"scraped": True}}
+            {"scraped": False}, {"$set": {"scraped": True, "completed": False}}
         )
+
+        if listing_url is None:
+            listing_url = listings_col.find_one({"completed": False})
+
+        if listing_url is None:
+            print("no more listings to scrape")
+            break
 
         get_listing_details(listing_url["url"])
 
+        listings_col.update_many(
+            {"listing_url": listing_url["url"]}, {"$set": {"completed": True}}
+        )
     except Exception as e:
         # Get the listing_detail_error collection
         listing_detail_error_col = db.get_collection("listing_detail_error")
@@ -354,5 +364,10 @@ for i in range(loop_times):
 
         # Insert the new document into the collection
         listing_detail_error_col.insert_one(new_error_doc)
-
+        
         print("updated listing_detail_error collection")
+
+        listings_col.update_many(
+            {"listing_url": listing_url["url"]}, {"$set": {"completed": True}}
+        )
+        
