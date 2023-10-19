@@ -350,7 +350,7 @@ for i in range(loop_times):
         get_listing_details(listing_url["url"])
 
         listings_col.update_many(
-            {"listing_url": listing_url["url"]}, {"$set": {"completed": True}}
+            {"url": listing_url["url"]}, {"$set": {"completed": True}}
         )
     except Exception as e:
         # Get the listing_detail_error collection
@@ -368,6 +368,6 @@ for i in range(loop_times):
         print("updated listing_detail_error collection")
 
         listings_col.update_many(
-            {"listing_url": listing_url["url"]}, {"$set": {"completed": True}}
+            {"url": listing_url["url"]}, {"$set": {"completed": True}}
         )
         
