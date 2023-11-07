@@ -37,6 +37,11 @@ def set_local_chrome_driver():
         },
     )
 
+    # TOR network proxy in case of scraper blocks
+    PROXY = os.getenv("PROXY",None)
+    if (PROXY):
+        chrome_options.add_argument('--proxy-server=%s' % PROXY)
+
     # Start driver
     driver = webdriver.Chrome(
         # ChromeDriverManager().install(),
@@ -60,6 +65,7 @@ def get_page_data(page_url):
     print("page "+str(page_number))
 
     # go to the page url
+    # driver.get("https://api.ipify.org?format=json")
     driver.get(page_url)
 
     listings = []
@@ -212,8 +218,6 @@ while next_page:
     page_number = page_tracker["page"]
 
     page_url = f"{base_url}/p{page_number}?PropertyCategory={categories}"
-    # page_url = f"{base_url}/p{page_number}?sp=pt%3d800000&PropertyCategory={categories}"
-    # page_url = f"{base_url}/p{page_number}?sp=pf%3d900000%26pt%3d1000000&PropertyCategory={categories}"
 
     get_page_data(page_url)
 

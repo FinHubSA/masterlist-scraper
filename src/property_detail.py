@@ -41,6 +41,11 @@ def set_local_chrome_driver():
         },
     )
 
+    # TOR network proxy in case of scraper blocks
+    PROXY = os.getenv("PROXY",None)
+    if (PROXY):
+        chrome_options.add_argument('--proxy-server=%s' % PROXY)
+
     # Start driver
     driver = webdriver.Chrome(
         # ChromeDriverManager().install(),
@@ -86,7 +91,6 @@ def server_timeout(listing_url, sleep_time):
 
 
 def get_listing_details(listing_url):
-    listing_details_col = db.get_collection("listing_details")
 
     # try to avoid server timeout
     time.sleep(2)
@@ -328,6 +332,9 @@ db = connect_db()
 
 # get the listing_url collection
 listings_col = db.get_collection("listings")
+
+listing_details_col = db.get_collection("listing_details")
+listing_details_col.create_index([("listing_url")], unique=True)
 
 loop_times = int(os.getenv("loopTimes", "10"))
 

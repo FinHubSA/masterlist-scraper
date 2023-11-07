@@ -55,3 +55,41 @@ gcloud auth configure-docker us-central1-docker.pkg.dev
 make sure the timeout of the tasks is in a good range so that they are not stopped prematurely
 
 make sure the memory allocated to each task is large enough as well
+
+## Setup Proxy for TOR network
+
+Build the image for proxy and TOR network setup. On docker hub the image is on the link below:
+
+https://hub.docker.com/r/dperson/torproxy
+
+Pull image from docker hub
+
+```
+docker pull --platform linux/amd64 dperson/torproxy
+```
+
+Tag your image
+
+```
+docker tag dperson/torproxy:latest us-central1-docker.pkg.dev/danae-rust-scraper-one/tor-proxy-repo/tor_proxy:1
+```
+
+Push your image to the registry:
+
+```
+docker push us-central1-docker.pkg.dev/danae-rust-scraper-one/tor-proxy-repo/tor_proxy:1
+```
+
+Create a GCE instance from the docker container
+
+- Go to the artifact registry and find repository with you container
+- Open the container then open the image.
+- On the digests page select the digest/version you want and on the actions click deploy to GCE
+
+Set firewall rules
+
+- Open the VM and click on it
+- Go to network interfaces and click on it
+- Go to firewalls and click on 'Add firewall rule'
+- In the source IPV4 ranges put 0.0.0.0/0 (to allow all)
+- In the ports put 8118, 9050-9051 (tor proxy listening ports)
