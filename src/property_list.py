@@ -39,6 +39,7 @@ def set_local_chrome_driver():
 
     # TOR network proxy in case of scraper blocks
     PROXY = os.getenv("PROXY",None)
+    # PROXY = '34.172.116.14:8118'
     if (PROXY):
         chrome_options.add_argument('--proxy-server=%s' % PROXY)
 
@@ -54,6 +55,7 @@ def connect_db():
     mongodbUri = os.getenv(
         "mongodb_uri",
         "mongodb://danaebouwer:kM8L8hQJYyrA0DkX@ac-6emdxtn-shard-00-00.yzat8l0.mongodb.net:27017,ac-6emdxtn-shard-00-01.yzat8l0.mongodb.net:27017,ac-6emdxtn-shard-00-02.yzat8l0.mongodb.net:27017/?replicaSet=atlas-11gfrx-shard-0&ssl=true&authSource=admin",
+        # "mongodb://localhost:27017",
     )
     client = MongoClient(mongodbUri)
     db = client.get_database("property24-data")
@@ -68,6 +70,7 @@ def get_page_data(page_url):
     # driver.get("https://api.ipify.org?format=json")
     driver.get(page_url)
 
+    # print(driver.page_source)
     listings = []
 
     try:
@@ -148,6 +151,11 @@ def get_listing_info(listing):
             By.XPATH,
             r".//span[@class='p24_price']",
         ).get_attribute('content')
+    
+    try:
+        listing_price = int(listing_price)
+    except Exception as e:
+        pass
     
     try:
         listing_currency = listing.find_element(

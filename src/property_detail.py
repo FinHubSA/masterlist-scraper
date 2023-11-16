@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import date
+from datetime import datetime
 
 from pymongo import MongoClient
 
@@ -43,6 +43,7 @@ def set_local_chrome_driver():
 
     # TOR network proxy in case of scraper blocks
     PROXY = os.getenv("PROXY",None)
+    # PROXY = '34.172.116.14:8118'
     if (PROXY):
         chrome_options.add_argument('--proxy-server=%s' % PROXY)
 
@@ -59,6 +60,7 @@ def connect_db():
     mongodbUri = os.getenv(
         "mongodb_uri",
         "mongodb://danaebouwer:kM8L8hQJYyrA0DkX@ac-6emdxtn-shard-00-00.yzat8l0.mongodb.net:27017,ac-6emdxtn-shard-00-01.yzat8l0.mongodb.net:27017,ac-6emdxtn-shard-00-02.yzat8l0.mongodb.net:27017/?replicaSet=atlas-11gfrx-shard-0&ssl=true&authSource=admin",
+        # "mongodb://localhost:27017",
     )
     client = MongoClient(mongodbUri)
     db = client.get_database("property24-data")
@@ -180,7 +182,7 @@ def get_listing_details(listing_url):
         except Exception as e:
             value = True
 
-        value = get_int_value(value)
+        value = get_typed_value(value)
 
         listing_detail_doc[key.split(":")[0]] = value
 
@@ -202,7 +204,8 @@ def get_listing_details(listing_url):
 
     print("updated listing_details_col collection")
 
-def get_int_value(value):
+
+def get_typed_value(value):
     if type(value) != bool:
         # try make value into integer
         try:
@@ -217,6 +220,11 @@ def get_int_value(value):
             pass
         try:
             value = int(value[:-2].replace(" ", ""))
+            return value
+        except Exception as e:
+            pass
+        try:
+            value = datetime.strptime(value,'%d %B %Y')
             return value
         except Exception as e:
             pass
@@ -253,7 +261,7 @@ def get_panel_data(panel_el, listing_detail_doc):
                     r".//*[@class='js_displayMap p24_addressPropOverview']",
                 ).text
 
-            value = get_int_value(value)
+            value = get_typed_value(value)
             
             if panel_heading.lower() == 'property overview':
                 listing_detail_doc[key] = value
@@ -323,6 +331,37 @@ def get_points_of_interest(panel_el, listing_detail_doc):
 
             poi_doc[key].append(value)
 
+def delete_duplicates():
+    fields_to_check = ['listing_url']  # Add the field names you want to check
+
+    for field in fields_to_check:
+        # Find duplicate values
+        pipeline = [
+            # { "$limit" : 40000 },
+            {
+                "$group": {
+                    "_id": f"${field}",
+                    "count": {"$sum": 1},
+                    "duplicates": {"$push": "$_id"}
+                }
+            },
+            {
+                "$match": {
+                    "count": {"$gt": 1}
+                }
+            }
+        ]
+
+        duplicates = list(listing_details_col.aggregate(pipeline))
+
+        if (len(duplicates) == 0):
+            break
+
+        # Iterate over duplicate values and delete the records
+        for duplicate in duplicates:
+            duplicate_ids = duplicate['duplicates'][1:]  # Keep one, delete others
+            listing_details_col.delete_many({"_id": {"$in": duplicate_ids}})
+
 # initialise the driver
 driver = set_local_chrome_driver()
 
@@ -342,7 +381,7 @@ for i in range(loop_times):
     try:
         print("scraping listing: " + str(i + 1) + "/" + str(loop_times))
 
-         # Find and update one document that matches the query
+        # Find and update one document that matches the query
         listing_url = listings_col.find_one_and_update(
             {"scraped": False}, {"$set": {"scraped": True, "completed": False}}
         )
@@ -353,7 +392,7 @@ for i in range(loop_times):
         if listing_url is None:
             print("no more listings to scrape")
             break
-
+        
         get_listing_details(listing_url["url"])
 
         listings_col.update_many(
