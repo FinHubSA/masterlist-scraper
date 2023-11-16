@@ -401,7 +401,7 @@ for i in range(loop_times):
         # Get the listing_detail_error collection
         listing_detail_error_col = db.get_collection("listing_detail_error")
 
-        error = traceback.print_exc() 
+        error = traceback.format_exc()
         # Create a new document as a Python dictionary
         new_error_doc = {
             "failed_request": listing_url["url"],
