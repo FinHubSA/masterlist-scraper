@@ -393,10 +393,8 @@ for i in range(loop_times):
             print("no more listings to scrape")
             break
         
-        if  listing_details_col.count_documents({"listing_url":listing_url["url"]}, limit = 1) != 0:
-            continue
-        
-        get_listing_details(listing_url["url"])
+        if  listing_details_col.count_documents({"listing_url":listing_url["url"]}, limit = 1) == 0:
+            get_listing_details(listing_url["url"])
 
         listings_col.update_many(
             {"url": listing_url["url"]}, {"$set": {"completed": True}}
