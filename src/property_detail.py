@@ -81,11 +81,7 @@ def server_timeout(listing_url, sleep_time):
             )
             break
         except:
-            print(
-                "server timeout failure, wait 2 mins. Scraped: "
-                + i
-                + " listings before timeout"
-            )
+            print("server timeout failure, wait 2 mins. URL: " + listing_url)
             time.sleep(sleep_time)
             attempts += 1
     else:
@@ -106,6 +102,7 @@ def get_listing_details(listing_url):
     # check if property is available
     not_available = driver.find_elements(By.XPATH, r"//*[@class='col-12']/h2")
     not_found = driver.find_elements(By.XPATH, r"//*[@class='col-6']/h1")
+
 
     if not_available or not_found:
         print("property no longer available")
