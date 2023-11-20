@@ -145,6 +145,7 @@ def get_listing_changes(listing, listing_info):
 ''' Gets the info of the listing like province, listingID, etc '''
 def get_listing_info(listing):
     url = listing.get_attribute("href")
+
     listing_locale = url.split("/")[-5:]
 
     listing_price = listing.find_element(
@@ -177,7 +178,8 @@ def get_listing_info(listing):
             "scraped": get_conditional_set("scraped",False),
             "suburb":listing_locale[0],
             "town":listing_locale[1],
-            "province":listing_locale[2]
+            "province":listing_locale[2],
+            "suburb_id": int(listing_locale[3])
         }
     
     for listing_badge in listing_badges:
@@ -199,6 +201,24 @@ def get_conditional_set(field_name, field_value):
                 'else': "$"+field_name
         }}
 
+def insert_suburb_ids():
+    listings = listings_col.find({})
+
+    bulk_update = []
+    for listing in listings:
+        url = listing["url"]
+        listing_locale = url.split("/")[-5:]
+        suburb_id = listing_locale[3]
+
+        bulk_update.append(
+            UpdateOne(
+                {"url": listing["url"]}, 
+                [{"$set": {"suburb_id": int(suburb_id)}}])
+        )
+    
+    db.listings.bulk_write(bulk_update, ordered=False)
+    
+
 # initialise the driver
 driver = set_local_chrome_driver()
 
@@ -207,8 +227,8 @@ print("connecting db")
 db = connect_db()
 
 # get the url collection
-listing_col = db.get_collection("listings")
-listing_col.create_index([("url")], unique=True)
+listings_col = db.get_collection("listings")
+listings_col.create_index([("url")], unique=True)
 
 # get the page tracker 
 listings_page_tracker_col = db.get_collection("listings_page_tracker")
