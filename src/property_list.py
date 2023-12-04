@@ -1,6 +1,6 @@
 import os
 
-from datetime import date
+from datetime import datetime, date
 from pymongo import MongoClient, ReturnDocument, UpdateOne
 
 from selenium import webdriver
@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 next_page = True
 base_url = os.getenv("base_url","https://www.property24.com/for-sale/western-cape/9")
 # base_url = os.getenv("base_url","https://www.property24.com/for-sale/mowbray/cape-town/western-cape/8677")
-# base_url = os.getenv("base_url","https://www.property24.com/for-sale/constantia/cape-town/western-cape/11742")
+# base_url = os.getenv("base_url","https://www.property24.com/for-sale/whispering-pines/gordons-bay/western-cape/16516")
 
 categories = os.getenv("categories","House,ApartmentOrFlat,Townhouse")
 page_number = 1
@@ -90,11 +90,14 @@ def get_page_data(page_url):
             if not listing.is_displayed():
                 continue
             
-            listing_info = get_listing_info(listing)
-            listing_changes = get_listing_changes(listing, listing_info)
-            
-            listing_info.update(listing_changes)
-            listings.append(listing_info)
+            try:
+                listing_info = get_listing_info(listing)
+                listing_changes = get_listing_changes(listing)
+                
+                listing_info.update(listing_changes)
+                listings.append(listing_info)
+            except Exception as e:
+                pass
 
         bulk_update(listings)
 
@@ -127,7 +130,7 @@ def bulk_update(listings):
         db.listings.bulk_write(bulk_update, ordered=False)
 
 ''' Gets any changes to the listing such as Offer, Reduction, Sold '''
-def get_listing_changes(listing, listing_info):
+def get_listing_changes(listing):
     changes_results = listing.find_elements(
             By.XPATH,
             r".//ul[@class='hidden-print p24_Gallerybadge']/li",
@@ -137,8 +140,7 @@ def get_listing_changes(listing, listing_info):
     for change in changes_results:
         change_text = (change.text).lower().replace(' ', '_')
         if change_text in ['under_offer','reduced','sold']:
-            price = listing_info["price"]["$cond"]["then"]
-            changes_dict[change_text+"."+price] = str(date.today())
+            changes_dict[change_text] = get_conditional_set(change_text, datetime.combine(date.today(), datetime.min.time()))
     
     return changes_dict
 
@@ -153,10 +155,7 @@ def get_listing_info(listing):
             r".//span[@class='p24_price']",
         ).get_attribute('content')
     
-    try:
-        listing_price = int(listing_price)
-    except Exception as e:
-        pass
+    listing_price = int(listing_price)
     
     try:
         listing_currency = listing.find_element(
@@ -174,6 +173,7 @@ def get_listing_info(listing):
     listing_info = {
             "url": url,
             "price": get_conditional_set("price",listing_price),
+            "current_price": listing_price,
             "currency": listing_currency,
             "scraped": get_conditional_set("scraped",False),
             "suburb":listing_locale[0],
@@ -195,14 +195,16 @@ Returns a condition for setting the field.
 If the field does not exist it will be SET otherwise it will remain UNCHANGED
 '''
 def get_conditional_set(field_name, field_value):
-    return {"$cond": {
-                'if':{"$eq": [{"$type": "$"+field_name}, "missing"]},
-                'then': field_value,
-                'else': "$"+field_name
-        }}
+    return {"$cond": 
+        {
+            'if':{"$eq": [{"$type": "$"+field_name}, "missing"]},
+            'then': field_value,
+            'else': "$"+field_name
+        }
+    }
 
 def insert_suburb_ids():
-    listings = listings_col.find({})
+    listings = listings_col.find({"suburb_id":{"$eq":None}})
 
     bulk_update = []
     for listing in listings:
@@ -217,7 +219,66 @@ def insert_suburb_ids():
         )
     
     db.listings.bulk_write(bulk_update, ordered=False)
+
+'''
+Rename price -> listing_price
+New field -> current price (shows if it was reduced)
+Reduced, Under-offer, Sold will now just be dates
+'''
+def refactor_data():
+    listings = listings_col.find(
+        # {"url":"https://www.property24.com/for-sale/gordons-bay-central/gordons-bay/western-cape/7833/113453405"}
+        )
+
+    bulk_update = []
+    for listing in listings:
+        
+        updates = []
+
+        date_str = '1900-01-01'
+        current_date = datetime.strptime(date_str, '%Y-%m-%d')
+        current_price = listing["current_price"]
+
+        if ("reduced" in listing and isinstance(listing["reduced"], dict)):
+
+            for price in listing["reduced"]:
+                price_date = datetime.strptime(listing["reduced"][price], '%Y-%m-%d')
+
+                if (current_date < price_date):
+                    current_date = price_date
+                    current_price = price
+
+                    updates.append({"$set": {"reduced": price_date}})
+
+        if ("under_offer" in listing and isinstance(listing["under_offer"], dict)):
+
+            for price in listing["under_offer"]:
+                price_date = datetime.strptime(listing["under_offer"][price], '%Y-%m-%d')
+
+                if (current_date < price_date):
+                    current_date = price_date
+                    current_price = price
+
+                    updates.append({"$set": {"under_offer": price_date}})
+
+        if ("sold" in listing and isinstance(listing["sold"], dict)):
+
+            for price in listing["sold"]:
+                price_date = datetime.strptime(listing["sold"][price], '%Y-%m-%d')
+
+                if (current_date < price_date):
+                    current_date = price_date
+                    current_price = price
+                    
+                    updates.append({"$set": {"sold": price_date}})
+
+        updates.append({"$set": {"current_price": int(current_price)}})
+
+        bulk_update.append(
+            UpdateOne({"url": listing["url"]}, updates)
+        )
     
+    db.listings.bulk_write(bulk_update, ordered=False)
 
 # initialise the driver
 driver = set_local_chrome_driver()
@@ -233,6 +294,8 @@ listings_col.create_index([("url")], unique=True)
 # get the page tracker 
 listings_page_tracker_col = db.get_collection("listings_page_tracker")
 listings_page_tracker_col.create_index([("url"),("date")], unique=True)
+
+# refactor_data()
 
 while next_page:
     try:
