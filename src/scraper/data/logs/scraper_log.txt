@@ -1,0 +1,21 @@
+
+
+Journal: https://www.jstor.org/journal/contcend
+Number of Issues scraped: 2
+Start time: 01/25/2024, 11:28:46
+End time: 01/25/2024, 11:33:48
+
+Journal: https://www.jstor.org/journal/acadserbsciearts
+Number of Issues scraped: 3
+Start time: 01/26/2024, 17:22:17
+End time: 01/26/2024, 17:25:59
+
+Journal: https://www.jstor.org/journal/willcarlwillrevi
+Number of Issues scraped: 2
+Start time: 01/29/2024, 13:18:48
+End time: 01/29/2024, 13:25:06
+
+Journal: https://www.jstor.org/journal/illiclasstud
+Number of Issues scraped: 2
+Start time: 01/29/2024, 16:44:12
+End time: 01/29/2024, 16:49:33

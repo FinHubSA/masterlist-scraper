@@ -1,9 +1,52 @@
 # Local
 
-## Run MongoDB
+## Install Postgres - Mac
+
+Update brew
 
 ```
-docker-compose up -d
+brew update
+```
+
+If there is an error
+
+```
+brew tap --repair
+brew cleanup
+brew update-reset
+```
+
+Install specific version of postgresql
+
+```
+brew install postgresql@14
+```
+
+If there is an error with starting postgres check the error logs:
+
+```
+brew services list
+tail -f /opt/homebrew/var/log/postgresql@14.log
+```
+
+If there is no folder for postgresql@14, create the folder like so:
+
+```
+initdb /opt/homebrew/var/postgresql@14
+```
+
+Create the user and database for the migrations:
+
+```
+psql postgres
+postgres=# create database masterlist;
+postgres=# create user admin;
+```
+
+Get into the python environment and migrate the tables
+
+```
+python manage.py migrate
 ```
 
 ## Run Property Listing Scraper
