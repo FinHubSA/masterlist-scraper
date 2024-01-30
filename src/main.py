@@ -18,7 +18,8 @@ if journal is None:
 # number of scraped issues currently
 scraped_issues = journal['numberOfIssuesScraped']
 
-issue_scrape_count = int(os.getenv("issue_scrape_count", "25"))
+# number of issues to scrape
+issue_scrape_count = int(os.getenv("ISSUE_SCRAPE_COUNT", "25"))
 
 scraper.scrape_journal(driver, journal, issue_scrape_count)
 

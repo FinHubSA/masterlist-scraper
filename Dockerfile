@@ -5,8 +5,6 @@ FROM selenium/standalone-chrome
 # Macbook M1 chip
 # FROM seleniarm/standalone-chromium 
 
-ENV script ""
-
 # chose  wd / working directory, for docker image
 WORKDIR /usr/app
 COPY . ./
@@ -21,4 +19,4 @@ RUN pip3 install -r requirements.txt
 # Macbook M1 chip
 # RUN pip3 install --break-system-packages -r requirements.txt
 
-CMD ["sh", "-c", "python3 ./src/${script}"]
+CMD ["sh", "-c", "python3 ./src/main.py"]

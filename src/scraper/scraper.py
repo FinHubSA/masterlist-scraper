@@ -78,13 +78,19 @@ def chrome_proxy(user: str, password: str, endpoint: str) -> dict:
 def db_setup():
     global connection, cursor
 
+    DATABASE = os.getenv("DATABASE", "masterlist")
+    DATABASE_USER = os.getenv("DATABASE_USER", "admin")
+    DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD", "")
+    DATABASE_HOST = os.getenv("DATABASE_HOST", "localhost")
+    DATABASE_PORT = os.getenv("DATABASE_PORT", "5432")
+
     # db connection
     connection = psycopg2.connect(
-        database = "masterlist",
-        user = "admin",
-        password = "",
-        host = "localhost",
-        port = "5432"
+        database = DATABASE,
+        user = DATABASE_USER,
+        password = DATABASE_PASSWORD,
+        host = DATABASE_HOST,
+        port = DATABASE_PORT
     )
 
     cursor = connection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
