@@ -49,18 +49,18 @@ Get into the python environment and migrate the tables
 python manage.py migrate
 ```
 
-## Run Property Listing Scraper
+## Run Masterlist Scraper
 
 Build the image
 
 ```
-docker image build -t property_data_scraper .
+docker image build -t masterlist_scraper .
 ```
 
-Run the image. Specify arguments for the script being run AND the mongodb connection uri.
+Run the image. Specify arguments for the script being run AND the postgres connection arguments if needed.
 
 ```
-docker run --network="host" -e script="property_list.py" -e mongodb_uri="mongodb://127.0.0.1:27017" property_data_scraper:latest
+docker run --network="host" -e DATABASE="masterlist" masterlist_scraper:latest
 ```
 
 ## Setup GCR Jobs
@@ -72,19 +72,19 @@ https://cloud.google.com/artifact-registry/docs/docker/store-docker-container-im
 Build the image for amd like this
 
 ```
-docker buildx build --platform linux/amd64 -t gcr_property_data_scraper .
+docker buildx build --platform linux/amd64 -t gcr_masterlist_scraper .
 ```
 
 Tag your image
 
 ```
-docker tag gcr_property_data_scraper:latest us-central1-docker.pkg.dev/danae-rust-scraper-one/property-scraper-repo/property_data_scraper:1
+docker tag gcr_masterlist_scraper:latest us-central1-docker.pkg.dev/danae-rust-scraper-one/masterlist-scraper-repo/masterlist_scraper:1
 ```
 
 Push your image to the remote:
 
 ```
-docker push us-central1-docker.pkg.dev/danae-rust-scraper-one/property-scraper-repo/property_data_scraper:1
+docker push us-central1-docker.pkg.dev/danae-rust-scraper-one/masterlist-scraper-repo/masterlist_scraper:1
 ```
 
 If you face permission denied run this

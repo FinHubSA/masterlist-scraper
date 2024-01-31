@@ -22,7 +22,6 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.remote import remote_connection
-from scraper.recaptcha_solver import recaptcha_solver
 
 
 # Sets up the webdriver on the selenium grid machine.
@@ -55,10 +54,10 @@ def driver_setup():
     PROXY_PASSWORD = os.getenv("PROXY_PASSWORD", None)
     PROXY_URL = os.getenv("PROXY_URL", None)
 
-    service = Service(executable_path=ChromeDriverManager().install())
+    # service = Service(executable_path=ChromeDriverManager().install())
     proxies = chrome_proxy(PROXY_USER, PROXY_PASSWORD, PROXY_URL)
     driver = webdriver.Chrome(
-        service=service, 
+        # service=service, 
         options=chrome_options, 
         seleniumwire_options=proxies
     )
@@ -81,7 +80,7 @@ def db_setup():
     DATABASE = os.getenv("DATABASE", "masterlist")
     DATABASE_USER = os.getenv("DATABASE_USER", "admin")
     DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD", "")
-    DATABASE_HOST = os.getenv("DATABASE_HOST", "localhost")
+    DATABASE_HOST = os.getenv("DATABASE_HOST", "host.docker.internal")
     DATABASE_PORT = os.getenv("DATABASE_PORT", "5432")
 
     # db connection
@@ -188,12 +187,13 @@ def scrape_journal(driver, journal, issue_scrape_count=-1):
         if count == issue_scrape_count:
             break
 
-        downloaded = download_citations(driver, issue_url)
+        downloaded, page_not_found = download_citations(driver, issue_url)
 
-        # if issue not downloadable then reduce number of issues of journal
-        if not downloaded:
-            number_of_issues = number_of_issues - 1
-            save_journal(journal, number_of_issues , {})
+        if (not downloaded):
+            # if issue page not found then reduce the issue count
+            if page_not_found:
+                number_of_issues = number_of_issues - 1
+                save_journal(journal, number_of_issues , {})
             continue
         
         old_name = os.path.join(directory, "data/logs/citations.txt")
@@ -224,8 +224,6 @@ def scrape_journal(driver, journal, issue_scrape_count=-1):
         
         citations_dicts = []
         for entry in citations_data.entries:
-            print(entry.fields_dict)
-            print(entry.items()[1:])
             citations_dicts.append(dict((x, y) for x, y in entry.items()[1:]))
 
         dataframe = pd.DataFrame(citations_dicts)
@@ -429,13 +427,6 @@ def load_page(driver, journal_url, issue_scrape_count):
     except Exception as e:
         print("Failed to access journal page ")
 
-        # print(driver.page_source)
-        directory = os.path.dirname(__file__)
-        misc_directory = os.path.join(directory, "misc/")
-
-        recaptcha_solver(driver, 1, misc_directory)
-
-
 def accept_cookies(driver, journal_url):
     try:
         WebDriverWait(driver, 5).until(
@@ -528,17 +519,15 @@ def download_citations(driver, issue_url):
         
         print("citations 3")
 
-        return True
+        return True, False
     except Exception as e:
         print("failed to download citations for ", issue_url)
         print(e)
-        # print(driver.page_source)
-        directory = os.path.dirname(__file__)
-        misc_directory = os.path.join(directory, "misc/")
 
-        success, start_time = recaptcha_solver(driver, 10, misc_directory)
-
-        return success
+        if (driver.getTitle().contains("Page not found")):
+            return False, True
+        
+        return False, False
 
 
 # This must run atomically
